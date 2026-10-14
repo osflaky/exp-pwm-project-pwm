@@ -1,0 +1,42 @@
+name: Build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: verify (JDK ${{ matrix.java }}) [${{ matrix.expander_leg }}]
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - java: 26
+          os: macos-latest
+          arch: arm64
+          runner: macos-latest
+          expander_leg: macos-latest-26-arm64
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up JDK ${{ matrix.java }}
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: ${{ matrix.java }}
+          # Temurin ships no native Windows aarch64 build of JDK 11. On that leg, install the
+          # x64 JDK, which runs under Windows 11 on Arm's x64 emulation. The JVM then reports an
+          # x64 os.arch, so frontend-maven-plugin downloads a matching x64 Node.js (win-x64).
+          # Without this it fell back to the nonexistent win-x86 Node.js build.
+          # Every other leg keeps the runner's native architecture (an empty value means the default).
+        architecture: ${{ (matrix.os == 'windows-latest' && matrix.arch == 
+          'arm64' && matrix.java == 11) && 'x64' || '' }}
+        cache: maven
+
+    - name: Build with Maven
+      run: ./mvnw --batch-mode clean verify
+    timeout-minutes: 150
